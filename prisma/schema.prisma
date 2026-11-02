@@ -1,0 +1,188 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ReturnStatus {
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  RECEIVED
+  INSPECTING
+  REFUND_PENDING
+  REFUNDED
+  EXCHANGED
+  CLOSED
+}
+
+enum ReturnReason {
+  DEFECTIVE
+  WRONG_ITEM
+  DAMAGED
+  NOT_AS_DESCRIBED
+  WRONG_SIZE
+  CHANGED_MIND
+  OTHER
+}
+
+enum ItemCondition {
+  UNINSPECTED
+  NEW
+  OPENED
+  DAMAGED
+  DEFECTIVE
+}
+
+enum InventoryDisposition {
+  RESTOCK
+  OPEN_BOX
+  DAMAGED
+  DISCARD
+}
+
+enum InventoryMovementType {
+  OPENING_STOCK
+  RETURN
+  ADJUSTMENT
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ResolutionType {
+  REFUND
+  EXCHANGE
+  STORE_CREDIT
+}
+
+model Store {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers Customer[]
+  products  Product[]
+  returns   ReturnRequest[]
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  createdAt DateTime @default(now())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  returns ReturnRequest[]
+
+  @@unique([storeId, email])
+}
+
+model Product {
+  id        String   @id @default(cuid())
+  name      String
+  sku       String
+  price     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  returnItems ReturnItem[]
+  inventory   ProductInventory?
+  movements   InventoryMovement[]
+
+  @@unique([storeId, sku])
+}
+
+model ProductInventory {
+  id                String   @id @default(cuid())
+  sellableQuantity  Int      @default(0)
+  openBoxQuantity   Int      @default(0)
+  damagedQuantity   Int      @default(0)
+  discardedQuantity Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  productId String  @unique
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ReturnRequest {
+  id          String       @id @default(cuid())
+  reference   String       @unique @default(cuid())
+  status      ReturnStatus @default(REQUESTED)
+  reason      ReturnReason
+  description String?
+  resolution  ResolutionType?
+  requestedAt DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  storeId    String
+  customerId String
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  items  ReturnItem[]
+  refund Refund?
+}
+
+model ReturnItem {
+  id          String        @id @default(cuid())
+  quantity    Int
+  condition   ItemCondition @default(UNINSPECTED)
+  notes       String?
+
+  disposition   InventoryDisposition?
+  dispositionAt DateTime?
+
+  returnId  String
+  productId String
+
+  returnRequest     ReturnRequest       @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  product           Product             @relation(fields: [productId], references: [id])
+  inventoryMovement InventoryMovement?
+}
+
+model InventoryMovement {
+  id          String                 @id @default(cuid())
+  type        InventoryMovementType
+  disposition InventoryDisposition
+  quantity    Int
+  note        String?
+  createdAt   DateTime               @default(now())
+
+  productId    String
+  returnItemId String? @unique
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  returnItem ReturnItem? @relation(fields: [returnItemId], references: [id], onDelete: Restrict)
+
+  @@index([productId, createdAt])
+  @@index([type, createdAt])
+}
+
+model Refund {
+  id          String       @id @default(cuid())
+  amount      Decimal      @db.Decimal(10, 2)
+  status      RefundStatus @default(PENDING)
+  processedAt DateTime?
+  createdAt   DateTime     @default(now())
+
+  returnId String        @unique
+  return   ReturnRequest @relation(fields: [returnId], references: [id], onDelete: Cascade)
+}

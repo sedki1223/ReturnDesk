@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: returndesk-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: returndesk
+      POSTGRES_PASSWORD: returndesk_dev
+      POSTGRES_DB: returndesk
+    ports:
+      - "5433:5432"
+    volumes:
+      - returndesk_data:/var/lib/postgresql
+
+volumes:
+  returndesk_data:
